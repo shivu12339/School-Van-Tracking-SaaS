@@ -5,6 +5,7 @@
     "dockerfilePath": "services/api/Dockerfile"
   },
   "deploy": {
+    "startCommand": "sh ./scripts/docker-entrypoint.sh",
     "healthcheckPath": "/api/v1/health/ready",
     "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE",

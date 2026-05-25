@@ -1,11 +1,13 @@
-# Worker service — set Railway rootDirectory to repo root (empty)
-# and dockerfilePath to services/api/Dockerfile.worker.
+# Railway worker service - rootDirectory = repo root,
+# dockerfilePath = services/api/Dockerfile.worker.
+# IMPORTANT: leave Railway dashboard "Start Command" EMPTY so this startCommand is used.
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "services/api/Dockerfile.worker"
 
 [deploy]
+startCommand = "node dist/worker.main.js"
 healthcheckPath = "/api/v1/health/ready"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"

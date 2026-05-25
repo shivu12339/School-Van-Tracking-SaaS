@@ -26,9 +26,12 @@ cd apps/web && npm run build
 | Build context | Repo root (so `packages/*` workspace packages are reachable) |
 | Dockerfile | `services/api/Dockerfile` |
 | Config | `railway.json` (root) or `services/api/railway.json` |
+| **Dashboard Start Command** | **EMPTY** (the `railway.json` `startCommand` is used) |
 | Health | `GET /api/v1/health/ready` |
 | WebSockets | Enabled |
-| Entrypoint | `services/api/scripts/docker-entrypoint.sh` (migrate + start) |
+| Entrypoint | `/app/scripts/docker-entrypoint.sh` (migrate + start) |
+
+> **GOTCHA — Start Command override.** The runtime image intentionally **does not include pnpm**. If Railway → Service → Settings → Deploy → **Start Command** contains anything (e.g. `pnpm --filter @schoolvan/api start`), the container will crash with `pnpm: not found`. **Clear the field**, then Redeploy. The repo's `railway.json` already pins `startCommand = "sh ./scripts/docker-entrypoint.sh"`, which Railway will fall back to.
 
 **Worker:** same root (repo root), `dockerfilePath = services/api/Dockerfile.worker`, `PROCESS_ROLE=worker`, see `infrastructure/railway/worker.railway.toml`.
 

@@ -1,11 +1,12 @@
-# Railway API service — set rootDirectory to repo root (empty) so the
-# Docker build context includes packages/* needed by the pnpm workspace.
+# Railway API service - rootDirectory = repo root, dockerfilePath = services/api/Dockerfile.
+# IMPORTANT: leave Railway dashboard "Start Command" EMPTY so this startCommand is used.
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "services/api/Dockerfile"
 
 [deploy]
+startCommand = "sh ./scripts/docker-entrypoint.sh"
 healthcheckPath = "/api/v1/health/ready"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"

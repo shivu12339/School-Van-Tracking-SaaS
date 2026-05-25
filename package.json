@@ -28,7 +28,7 @@
     "smoke": "bash infrastructure/scripts/smoke-test.sh",
     "health": "bash infrastructure/scripts/health-check.sh",
     "validate:deploy": "node infrastructure/scripts/validate-production-env.mjs",
-    "validate:live": "pwsh -File infrastructure/scripts/live-deploy-validate.ps1",
+    "validate:live": "powershell -ExecutionPolicy Bypass -File infrastructure/scripts/live-deploy-validate.ps1",
     "test:e2e:api": "pnpm --filter @schoolvan/api test:e2e",
     "qa:load": "k6 run tests/load/k6/api-health.js",
     "qa:all": "pnpm test && pnpm test:e2e:api",

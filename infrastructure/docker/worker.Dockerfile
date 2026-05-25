@@ -41,6 +41,8 @@ COPY --from=deploy --chown=app:app /out/dist ./dist
 COPY --from=deploy --chown=app:app /out/prisma ./prisma
 COPY --from=deploy --chown=app:app /out/package.json ./package.json
 
+RUN mkdir -p /app/logs && chown -R app:app /app
+
 USER app
 EXPOSE 4001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \

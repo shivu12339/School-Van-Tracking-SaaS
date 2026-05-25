@@ -50,7 +50,9 @@ COPY --from=deploy --chown=app:app /out/dist ./dist
 COPY --from=deploy --chown=app:app /out/prisma ./prisma
 COPY --from=deploy --chown=app:app /out/scripts ./scripts
 COPY --from=deploy --chown=app:app /out/package.json ./package.json
-RUN chmod +x ./scripts/docker-entrypoint.sh
+RUN mkdir -p /app/logs \
+  && chmod +x ./scripts/docker-entrypoint.sh \
+  && chown -R app:app /app
 
 USER app
 EXPOSE 4000

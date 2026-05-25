@@ -73,7 +73,12 @@ COPY --from=deploy --chown=app:app /out/prisma ./prisma
 COPY --from=deploy --chown=app:app /out/scripts ./scripts
 COPY --from=deploy --chown=app:app /out/package.json ./package.json
 
-RUN chmod +x ./scripts/docker-entrypoint.sh
+# Winston writes logs/{error,combined}.log at runtime — pre-create the dir
+# and ensure the non-root `app` user owns the entire workdir so it can be
+# written without EACCES.
+RUN mkdir -p /app/logs \
+  && chmod +x ./scripts/docker-entrypoint.sh \
+  && chown -R app:app /app
 
 USER app
 EXPOSE 4000

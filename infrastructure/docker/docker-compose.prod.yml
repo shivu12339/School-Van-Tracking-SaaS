@@ -1,0 +1,69 @@
+# Local production-like stack (API + Worker + PostGIS + Redis)
+# Usage: docker compose -f infrastructure/docker/docker-compose.prod.yml --env-file .env up --build
+
+name: schoolvan-prod-local
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: schoolvan
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../scripts/enable-postgis.sql:/docker-entrypoint-initdb.d/01-postgis.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+
+  api:
+    build:
+      context: ../../services/api
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    env_file:
+      - ../../.env
+    environment:
+      PROCESS_ROLE: api
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/schoolvan?schema=public
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/schoolvan?schema=public
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGINS: http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../../services/api
+      dockerfile: ../../infrastructure/docker/worker.Dockerfile
+    env_file:
+      - ../../.env
+    environment:
+      PROCESS_ROLE: worker
+      API_PORT: 4001
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/schoolvan?schema=public
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:

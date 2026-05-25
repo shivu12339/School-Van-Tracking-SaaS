@@ -1,0 +1,81 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: true
+
+jobs:
+  migrate-staging:
+    name: Prisma migrate (staging)
+    runs-on: ubuntu-latest
+    environment: staging
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install
+      - name: Migrate deploy
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.STAGING_DIRECT_DATABASE_URL }}
+        run: pnpm prisma migrate deploy
+
+  deploy-api-staging:
+    name: Railway staging — API
+    runs-on: ubuntu-latest
+    needs: [migrate-staging]
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trigger Railway redeploy (API)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICE_ID: ${{ secrets.RAILWAY_STAGING_API_SERVICE_ID }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ] || [ -z "$SERVICE_ID" ]; then
+            echo "Skipping — configure RAILWAY_TOKEN and RAILWAY_STAGING_API_SERVICE_ID"
+            exit 0
+          fi
+          curl -fsSL -X POST \
+            -H "Authorization: Bearer $RAILWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\":\"mutation { serviceInstanceRedeploy(serviceId: \\\"$SERVICE_ID\\\") }\"}" \
+            https://backboard.railway.app/graphql/v2
+
+  deploy-web-staging:
+    name: Vercel preview / staging
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: apps/web
+          vercel-args: '--target=preview'
+
+  smoke-staging:
+    name: Smoke test (staging)
+    runs-on: ubuntu-latest
+    needs: [deploy-api-staging]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Health check
+        env:
+          API_URL: ${{ secrets.STAGING_API_URL }}
+        run: |
+          if [ -z "$API_URL" ]; then echo "Set STAGING_API_URL secret"; exit 0; fi
+          bash infrastructure/scripts/health-check.sh

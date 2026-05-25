@@ -1,0 +1,15 @@
+{
+  "@@locale": "en",
+  "appTitle": "School Van",
+  "loginTitle": "Parent sign in",
+  "email": "Email",
+  "password": "Password",
+  "schoolCode": "School code",
+  "signIn": "Sign in",
+  "liveTracking": "Live tracking",
+  "notifications": "Notifications",
+  "tripHistory": "Trip history",
+  "settings": "Settings",
+  "etaMinutes": "{minutes} min away",
+  "@etaMinutes": { "placeholders": { "minutes": { "type": "int" } } }
+}

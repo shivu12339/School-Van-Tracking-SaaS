@@ -1,0 +1,11 @@
+node_modules
+.turbo
+dist
+coverage
+.next
+pnpm-lock.yaml
+*.min.js
+apps/driver
+apps/parent
+**/.dart_tool
+**/build

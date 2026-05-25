@@ -1,0 +1,25 @@
+name: Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'API base URL (no trailing slash)'
+        required: true
+        default: 'https://api.yourdomain.com'
+  schedule:
+    # Daily production health probe (configure secrets)
+    - cron: '0 */6 * * *'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Health endpoints
+        env:
+          API_URL: ${{ github.event.inputs.api_url || secrets.PRODUCTION_API_URL }}
+        run: |
+          test -n "$API_URL" || (echo "Provide api_url input or PRODUCTION_API_URL secret" && exit 1)
+          bash infrastructure/scripts/health-check.sh
+          bash infrastructure/scripts/smoke-test.sh

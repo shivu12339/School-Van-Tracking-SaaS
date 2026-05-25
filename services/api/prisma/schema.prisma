@@ -1,0 +1,727 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum RoleCode {
+  SUPER_ADMIN
+  SCHOOL_ADMIN
+  DRIVER
+  PARENT
+}
+
+enum TripStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TripDirection {
+  PICKUP
+  DROPOFF
+  RETURN
+}
+
+enum TripStudentStatus {
+  PENDING
+  PICKED
+  DROPPED
+  ABSENT
+}
+
+enum NotificationType {
+  VAN_WITHIN_1KM
+  VAN_WITHIN_500M
+  STUDENT_PICKED
+  STUDENT_DROPPED
+  VAN_REACHED_SCHOOL
+  RETURN_TRIP_STARTED
+  SOS_EMERGENCY
+  DRIVER_OFFLINE
+  TRIP_DELAYED
+  SUBSCRIPTION_EXPIRY
+  SCHOOL_ANNOUNCEMENT
+}
+
+enum NotificationStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  DELIVERED
+  FAILED
+  DEAD_LETTER
+}
+
+enum PushPlatform {
+  ANDROID
+  IOS
+  WEB
+}
+
+enum SessionStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  START_TRIP
+  STOP_TRIP
+  PICK_STUDENT
+  DROP_STUDENT
+}
+
+enum EmergencySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PlanTier {
+  BASIC
+  STANDARD
+  PREMIUM
+}
+
+enum SchoolOperationalStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  TRIAL
+}
+
+enum BillingStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  GRACE
+}
+
+model PlanCatalog {
+  id                   String       @id @default(uuid()) @db.Uuid
+  tier                 PlanTier     @unique
+  name                 String
+  monthlyPrice         Decimal      @map("monthly_price") @db.Decimal(12, 2)
+  maxVans              Int          @map("max_vans")
+  maxDrivers           Int          @map("max_drivers")
+  maxStudents          Int          @map("max_students")
+  trackingLogsPerDay   Int          @map("tracking_logs_per_day")
+  analyticsEnabled     Boolean      @default(false) @map("analytics_enabled")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+  subscriptions        SchoolSubscription[]
+
+  @@map("plan_catalog")
+}
+
+model School {
+  id                String            @id @default(uuid()) @db.Uuid
+  code              String            @unique
+  name              String
+  email             String?
+  phone             String?
+  timezone          String            @default("Asia/Kolkata")
+  address           String?
+  language          String            @default("en")
+  logoUrl           String?           @map("logo_url")
+  primaryColor      String?           @map("primary_color")
+  secondaryColor    String?           @map("secondary_color")
+  status            SchoolOperationalStatus @default(PENDING)
+  isActive          Boolean           @default(true) @map("is_active")
+  trialEndsAt       DateTime?         @map("trial_ends_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  deletedAt         DateTime?         @map("deleted_at")
+  settings          SchoolSettings?
+  subscription      SchoolSubscription?
+  subscriptionPlans SubscriptionPlan[]
+  roles             Role[]
+  userRoles         UserRoleAssignment[]
+  users             User[]
+  drivers           Driver[]
+  parents           Parent[]
+  students          Student[]
+  vans              Van[]
+  routes            Route[]
+  routeStops        RouteStop[]
+  trips             Trip[]
+  tripStudents      TripStudent[]
+  trackingLogs      TrackingLog[]
+  notifications     Notification[]
+  refreshTokens     RefreshToken[]
+  auditLogs         AuditLog[]
+  deviceSessions    DeviceSession[]
+  emergencyAlerts   EmergencyAlert[]
+
+  @@index([isActive, createdAt], map: "idx_schools_active_created")
+  @@index([deletedAt], map: "idx_schools_deleted_at")
+  @@index([status, isActive], map: "idx_schools_status_active")
+  @@map("schools")
+}
+
+model SchoolSettings {
+  id                      String   @id @default(uuid()) @db.Uuid
+  schoolId                String   @unique @map("school_id") @db.Uuid
+  school                  School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pickupRadius1Km         Int      @default(1000) @map("pickup_radius_1km")
+  pickupRadius500m        Int      @default(500) @map("pickup_radius_500m")
+  notificationsEnabled    Boolean  @default(true) @map("notifications_enabled")
+  liveTrackingEnabled     Boolean  @default(true) @map("live_tracking_enabled")
+  sosEnabled              Boolean  @default(true) @map("sos_enabled")
+  contactEmail            String?  @map("contact_email")
+  contactPhone            String?  @map("contact_phone")
+  metadata                Json?
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@map("school_settings")
+}
+
+model SchoolSubscription {
+  id              String        @id @default(uuid()) @db.Uuid
+  schoolId        String        @unique @map("school_id") @db.Uuid
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  planCatalogId   String        @map("plan_catalog_id") @db.Uuid
+  planCatalog     PlanCatalog   @relation(fields: [planCatalogId], references: [id], onDelete: Restrict)
+  billingStatus   BillingStatus @default(TRIAL) @map("billing_status")
+  startsAt        DateTime      @map("starts_at")
+  endsAt          DateTime?     @map("ends_at")
+  graceEndsAt     DateTime?     @map("grace_ends_at")
+  trialEndsAt     DateTime?     @map("trial_ends_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([billingStatus, endsAt], map: "idx_school_subscriptions_billing")
+  @@map("school_subscriptions")
+}
+
+model SubscriptionPlan {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  school          School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  planName        String    @map("plan_name")
+  monthlyPrice    Decimal   @map("monthly_price") @db.Decimal(12, 2)
+  billingCurrency String    @default("INR") @map("billing_currency")
+  maxVans         Int       @default(0) @map("max_vans")
+  maxStudents     Int       @default(0) @map("max_students")
+  isActive        Boolean   @default(true) @map("is_active")
+  startsAt        DateTime? @map("starts_at")
+  endsAt          DateTime? @map("ends_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  @@index([schoolId, isActive], map: "idx_subscription_plans_school_active")
+  @@index([schoolId, deletedAt], map: "idx_subscription_plans_school_deleted")
+  @@map("subscription_plans")
+}
+
+model Role {
+  id               String           @id @default(uuid()) @db.Uuid
+  schoolId         String?          @map("school_id") @db.Uuid
+  school           School?          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  code             RoleCode
+  name             String
+  description      String?
+  isSystem         Boolean          @default(false) @map("is_system")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  deletedAt        DateTime?        @map("deleted_at")
+  rolePermissions  RolePermission[]
+  userRoles        UserRoleAssignment[]
+
+  @@unique([schoolId, code], map: "uq_roles_school_code")
+  @@index([schoolId, deletedAt], map: "idx_roles_school_deleted")
+  @@map("roles")
+}
+
+model Permission {
+  id               String           @id @default(uuid()) @db.Uuid
+  key              String           @unique
+  name             String
+  description      String?
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  rolePermissions  RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id            String      @id @default(uuid()) @db.Uuid
+  roleId        String      @map("role_id") @db.Uuid
+  permissionId  String      @map("permission_id") @db.Uuid
+  createdAt     DateTime    @default(now()) @map("created_at")
+  role          Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission    Permission  @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId], map: "uq_role_permissions_role_permission")
+  @@index([permissionId], map: "idx_role_permissions_permission")
+  @@map("role_permissions")
+}
+
+model User {
+  id               String               @id @default(uuid()) @db.Uuid
+  schoolId         String?              @map("school_id") @db.Uuid
+  school           School?              @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  email            String
+  passwordHash     String               @map("password_hash")
+  firstName        String               @map("first_name")
+  lastName         String?              @map("last_name")
+  phone            String?
+  isActive         Boolean              @default(true) @map("is_active")
+  failedLoginAttempts Int               @default(0) @map("failed_login_attempts")
+  lockedUntil      DateTime?            @map("locked_until")
+  passwordResetTokenHash String?        @map("password_reset_token_hash")
+  passwordResetExpiresAt DateTime?      @map("password_reset_expires_at")
+  lastLoginAt      DateTime?            @map("last_login_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+  deletedAt        DateTime?            @map("deleted_at")
+  userRoles        UserRoleAssignment[]
+  driverProfile    Driver?
+  parentProfile    Parent?
+  refreshTokens    RefreshToken[]
+  sessions         DeviceSession[]
+  auditLogs        AuditLog[]           @relation("AuditActor")
+  notifications    Notification[]
+  pushTokens       DevicePushToken[]
+  notificationPrefs NotificationPreference?
+  emergencyAlerts  EmergencyAlert[]     @relation("EmergencyTriggeredBy")
+
+  @@unique([schoolId, email], map: "uq_users_school_email")
+  @@index([schoolId, isActive], map: "idx_users_school_active")
+  @@index([schoolId, deletedAt], map: "idx_users_school_deleted")
+  @@map("users")
+}
+
+model UserRoleAssignment {
+  id         String    @id @default(uuid()) @db.Uuid
+  schoolId   String?   @map("school_id") @db.Uuid
+  school     School?   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  userId     String    @map("user_id") @db.Uuid
+  roleId     String    @map("role_id") @db.Uuid
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@unique([userId, roleId], map: "uq_user_roles_user_role")
+  @@index([schoolId, userId], map: "idx_user_roles_school_user")
+  @@map("user_roles")
+}
+
+model Driver {
+  id               String           @id @default(uuid()) @db.Uuid
+  schoolId         String           @map("school_id") @db.Uuid
+  school           School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  userId           String           @unique @map("user_id") @db.Uuid
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode     String?          @map("employee_code")
+  licenseNumber    String           @map("license_number")
+  licenseValidTill DateTime?        @map("license_valid_till")
+  isAvailable      Boolean          @default(true) @map("is_available")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  deletedAt        DateTime?        @map("deleted_at")
+  trips            Trip[]
+
+  @@unique([schoolId, licenseNumber], map: "uq_drivers_school_license")
+  @@index([schoolId, isAvailable], map: "idx_drivers_school_available")
+  @@index([schoolId, deletedAt], map: "idx_drivers_school_deleted")
+  @@map("drivers")
+}
+
+model Parent {
+  id              String           @id @default(uuid()) @db.Uuid
+  schoolId        String           @map("school_id") @db.Uuid
+  school          School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  userId          String           @unique @map("user_id") @db.Uuid
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relationship    String?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  deletedAt       DateTime?        @map("deleted_at")
+  students        Student[]
+  notifications   Notification[]
+
+  @@index([schoolId, deletedAt], map: "idx_parents_school_deleted")
+  @@map("parents")
+}
+
+model Student {
+  id              String           @id @default(uuid()) @db.Uuid
+  schoolId        String           @map("school_id") @db.Uuid
+  school          School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  parentId        String           @map("parent_id") @db.Uuid
+  parent          Parent           @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  routeId         String?          @map("route_id") @db.Uuid
+  route           Route?           @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  admissionNumber String           @map("admission_number")
+  fullName        String           @map("full_name")
+  grade           String?
+  section         String?
+  homeAddress     String?          @map("home_address")
+  homeLatitude    Decimal?         @map("home_latitude") @db.Decimal(10, 8)
+  homeLongitude   Decimal?         @map("home_longitude") @db.Decimal(11, 8)
+  homeLocation    Unsupported("geography(Point, 4326)")? @map("home_location")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  deletedAt       DateTime?        @map("deleted_at")
+  tripStudents    TripStudent[]
+
+  @@unique([schoolId, admissionNumber], map: "uq_students_school_admission")
+  @@index([schoolId, parentId], map: "idx_students_school_parent")
+  @@index([schoolId, routeId], map: "idx_students_school_route")
+  @@index([schoolId, deletedAt], map: "idx_students_school_deleted")
+  @@map("students")
+}
+
+model Van {
+  id               String       @id @default(uuid()) @db.Uuid
+  schoolId         String       @map("school_id") @db.Uuid
+  school           School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  registrationNo   String       @map("registration_no")
+  label            String?
+  capacity         Int
+  gpsDeviceCode    String?      @map("gps_device_code")
+  isActive         Boolean      @default(true) @map("is_active")
+  currentLatitude  Decimal?     @map("current_latitude") @db.Decimal(10, 8)
+  currentLongitude Decimal?     @map("current_longitude") @db.Decimal(11, 8)
+  currentLocation  Unsupported("geography(Point, 4326)")? @map("current_location")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+  deletedAt        DateTime?    @map("deleted_at")
+  routes           Route[]
+  trips            Trip[]
+
+  @@unique([schoolId, registrationNo], map: "uq_vans_school_registration")
+  @@index([schoolId, isActive], map: "idx_vans_school_active")
+  @@index([schoolId, deletedAt], map: "idx_vans_school_deleted")
+  @@map("vans")
+}
+
+model Route {
+  id              String       @id @default(uuid()) @db.Uuid
+  schoolId        String       @map("school_id") @db.Uuid
+  school          School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  vanId           String?      @map("van_id") @db.Uuid
+  van             Van?         @relation(fields: [vanId], references: [id], onDelete: SetNull)
+  routeCode       String       @map("route_code")
+  routeName       String       @map("route_name")
+  direction       TripDirection @default(PICKUP)
+  isActive        Boolean      @default(true) @map("is_active")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  deletedAt       DateTime?    @map("deleted_at")
+  stops           RouteStop[]
+  trips           Trip[]
+  students        Student[]
+
+  @@unique([schoolId, routeCode], map: "uq_routes_school_route_code")
+  @@index([schoolId, isActive], map: "idx_routes_school_active")
+  @@index([schoolId, vanId], map: "idx_routes_school_van")
+  @@index([schoolId, deletedAt], map: "idx_routes_school_deleted")
+  @@map("routes")
+}
+
+model RouteStop {
+  id            String       @id @default(uuid()) @db.Uuid
+  schoolId      String       @map("school_id") @db.Uuid
+  school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  routeId       String       @map("route_id") @db.Uuid
+  route         Route        @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  stopName      String       @map("stop_name")
+  stopOrder     Int          @map("stop_order")
+  stopLatitude  Decimal?     @map("stop_latitude") @db.Decimal(10, 8)
+  stopLongitude Decimal?     @map("stop_longitude") @db.Decimal(11, 8)
+  stopLocation  Unsupported("geography(Point, 4326)")? @map("stop_location")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  deletedAt     DateTime?    @map("deleted_at")
+  tripStudents  TripStudent[]
+
+  @@unique([routeId, stopOrder], map: "uq_route_stops_route_order")
+  @@index([schoolId, routeId], map: "idx_route_stops_school_route")
+  @@index([schoolId, deletedAt], map: "idx_route_stops_school_deleted")
+  @@map("route_stops")
+}
+
+model Trip {
+  id              String        @id @default(uuid()) @db.Uuid
+  schoolId        String        @map("school_id") @db.Uuid
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  routeId         String        @map("route_id") @db.Uuid
+  route           Route         @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  vanId           String        @map("van_id") @db.Uuid
+  van             Van           @relation(fields: [vanId], references: [id], onDelete: Restrict)
+  driverId        String        @map("driver_id") @db.Uuid
+  driver          Driver        @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  tripDate        DateTime      @map("trip_date")
+  direction       TripDirection @default(PICKUP)
+  status          TripStatus    @default(SCHEDULED)
+  startedAt       DateTime?     @map("started_at")
+  endedAt         DateTime?     @map("ended_at")
+  startLocation   Unsupported("geography(Point, 4326)")? @map("start_location")
+  endLocation     Unsupported("geography(Point, 4326)")? @map("end_location")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
+  trackingLogs    TrackingLog[]
+  tripStudents    TripStudent[]
+  notifications   Notification[]
+  emergencyAlerts EmergencyAlert[]
+
+  @@index([schoolId, tripDate, status], map: "idx_trips_school_date_status")
+  @@index([schoolId, driverId, tripDate], map: "idx_trips_school_driver_date")
+  @@index([schoolId, vanId, tripDate], map: "idx_trips_school_van_date")
+  @@index([schoolId, deletedAt], map: "idx_trips_school_deleted")
+  @@map("trips")
+}
+
+model TripStudent {
+  id             String            @id @default(uuid()) @db.Uuid
+  schoolId       String            @map("school_id") @db.Uuid
+  school         School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  tripId         String            @map("trip_id") @db.Uuid
+  trip           Trip              @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  studentId      String            @map("student_id") @db.Uuid
+  student        Student           @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  stopId         String?           @map("stop_id") @db.Uuid
+  stop           RouteStop?        @relation(fields: [stopId], references: [id], onDelete: SetNull)
+  status         TripStudentStatus @default(PENDING)
+  pickupAt       DateTime?         @map("pickup_at")
+  dropAt         DateTime?         @map("drop_at")
+  attendanceNote String?           @map("attendance_note")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  deletedAt      DateTime?         @map("deleted_at")
+
+  @@unique([tripId, studentId], map: "uq_trip_students_trip_student")
+  @@index([schoolId, tripId, status], map: "idx_trip_students_school_trip_status")
+  @@index([schoolId, studentId, status], map: "idx_trip_students_school_student_status")
+  @@index([schoolId, deletedAt], map: "idx_trip_students_school_deleted")
+  @@map("trip_students")
+}
+
+model TrackingLog {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  school          School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  tripId          String    @map("trip_id") @db.Uuid
+  trip            Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  vanId           String?   @map("van_id") @db.Uuid
+  latitude        Decimal   @db.Decimal(10, 8)
+  longitude       Decimal   @db.Decimal(11, 8)
+  heading         Decimal?  @db.Decimal(6, 2)
+  speed           Decimal?  @db.Decimal(6, 2)
+  accuracy        Decimal?  @db.Decimal(6, 2)
+  location        Unsupported("geography(Point, 4326)")? @map("location")
+  eventTimestamp  DateTime  @map("event_timestamp")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([schoolId, tripId, eventTimestamp], map: "idx_tracking_logs_school_trip_event")
+  @@index([tripId, eventTimestamp], map: "idx_tracking_logs_trip_event")
+  @@index([schoolId, createdAt], map: "idx_tracking_logs_school_created")
+  @@index([eventTimestamp], map: "idx_tracking_logs_event_ts")
+  @@map("tracking_logs")
+}
+
+/// Cold storage for GPS points moved off the hot tracking_logs table.
+model TrackingLogArchive {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  tripId         String   @map("trip_id") @db.Uuid
+  vanId          String?  @map("van_id") @db.Uuid
+  latitude       Decimal  @db.Decimal(10, 8)
+  longitude      Decimal  @db.Decimal(11, 8)
+  heading        Decimal? @db.Decimal(6, 2)
+  speed          Decimal? @db.Decimal(6, 2)
+  accuracy       Decimal? @db.Decimal(6, 2)
+  location       Unsupported("geography(Point, 4326)")?
+  eventTimestamp DateTime @map("event_timestamp")
+  archivedAt     DateTime @default(now()) @map("archived_at")
+
+  @@index([schoolId, tripId, eventTimestamp], map: "idx_tracking_logs_archive_school_trip_event")
+  @@index([tripId, eventTimestamp], map: "idx_tracking_logs_archive_trip_event")
+  @@index([archivedAt], map: "idx_tracking_logs_archive_archived_at")
+  @@map("tracking_logs_archive")
+}
+
+model Notification {
+  id             String             @id @default(uuid()) @db.Uuid
+  schoolId       String             @map("school_id") @db.Uuid
+  school         School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  userId         String             @map("user_id") @db.Uuid
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentId       String?            @map("parent_id") @db.Uuid
+  parent         Parent?            @relation(fields: [parentId], references: [id], onDelete: SetNull)
+  tripId         String?            @map("trip_id") @db.Uuid
+  trip           Trip?              @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  type           NotificationType
+  status         NotificationStatus @default(QUEUED)
+  title          String
+  body           String
+  locale         String             @default("en")
+  deepLink       String?            @map("deep_link")
+  metadata       Json?
+  readAt         DateTime?          @map("read_at")
+  sentAt         DateTime?          @map("sent_at")
+  deliveredAt    DateTime?          @map("delivered_at")
+  clickedAt      DateTime?          @map("clicked_at")
+  failedAt       DateTime?          @map("failed_at")
+  providerRef    String?            @map("provider_ref")
+  attemptCount   Int                @default(0) @map("attempt_count")
+  lastError      String?            @map("last_error")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  deletedAt      DateTime?          @map("deleted_at")
+
+  @@index([schoolId, userId, readAt], map: "idx_notifications_school_user_read")
+  @@index([schoolId, type, createdAt], map: "idx_notifications_school_type_created")
+  @@index([schoolId, tripId], map: "idx_notifications_school_trip")
+  @@index([schoolId, status, createdAt], map: "idx_notifications_school_status_created")
+  @@index([schoolId, deletedAt], map: "idx_notifications_school_deleted")
+  @@map("notifications")
+}
+
+model DevicePushToken {
+  id            String       @id @default(uuid()) @db.Uuid
+  userId        String       @map("user_id") @db.Uuid
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schoolId      String?      @map("school_id") @db.Uuid
+  deviceId      String       @map("device_id")
+  fcmToken      String       @map("fcm_token")
+  platform      PushPlatform
+  appVersion    String?      @map("app_version")
+  deviceInfo    Json?        @map("device_info")
+  isActive      Boolean      @default(true) @map("is_active")
+  lastActiveAt  DateTime?    @map("last_active_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  @@unique([userId, deviceId], map: "uq_device_push_tokens_user_device")
+  @@index([schoolId, isActive], map: "idx_device_push_tokens_school_active")
+  @@index([fcmToken], map: "idx_device_push_tokens_fcm")
+  @@map("device_push_tokens")
+}
+
+model NotificationPreference {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @unique @map("user_id") @db.Uuid
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schoolId           String?  @map("school_id") @db.Uuid
+  enabled            Boolean  @default(true)
+  enabledTypes       Json?    @map("enabled_types")
+  quietHoursStart    String?  @map("quiet_hours_start")
+  quietHoursEnd      String?  @map("quiet_hours_end")
+  locale             String   @default("en")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("notification_preferences")
+}
+
+model RefreshToken {
+  id             String        @id @default(uuid()) @db.Uuid
+  schoolId       String?       @map("school_id") @db.Uuid
+  school         School?       @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  userId         String        @map("user_id") @db.Uuid
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash      String        @map("token_hash")
+  familyId       String        @default(uuid()) @map("family_id") @db.Uuid
+  expiresAt      DateTime      @map("expires_at")
+  revokedAt      DateTime?     @map("revoked_at")
+  status         SessionStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  sessions       DeviceSession[]
+
+  @@unique([tokenHash], map: "uq_refresh_tokens_token_hash")
+  @@index([userId, status], map: "idx_refresh_tokens_user_status")
+  @@index([expiresAt], map: "idx_refresh_tokens_expires_at")
+  @@index([familyId], map: "idx_refresh_tokens_family")
+  @@index([schoolId, status], map: "idx_refresh_tokens_school_status")
+  @@map("refresh_tokens")
+}
+
+model DeviceSession {
+  id              String        @id @default(uuid()) @db.Uuid
+  schoolId        String?       @map("school_id") @db.Uuid
+  school          School?       @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  userId          String        @map("user_id") @db.Uuid
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenId  String?       @map("refresh_token_id") @db.Uuid
+  refreshToken    RefreshToken? @relation(fields: [refreshTokenId], references: [id], onDelete: SetNull)
+  deviceId        String        @map("device_id")
+  platform        String
+  appVersion      String?       @map("app_version")
+  ipAddress       String?       @map("ip_address")
+  userAgent       String?       @map("user_agent")
+  status          SessionStatus @default(ACTIVE)
+  lastSeenAt      DateTime?     @map("last_seen_at")
+  expiresAt       DateTime      @map("expires_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([userId, status], map: "idx_device_sessions_user_status")
+  @@index([schoolId, status], map: "idx_device_sessions_school_status")
+  @@unique([userId, deviceId], map: "uq_device_sessions_user_device")
+  @@map("device_sessions")
+}
+
+model AuditLog {
+  id             String      @id @default(uuid()) @db.Uuid
+  schoolId       String?     @map("school_id") @db.Uuid
+  school         School?     @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  actorUserId    String?     @map("actor_user_id") @db.Uuid
+  actorUser      User?       @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  action         AuditAction
+  entityType     String      @map("entity_type")
+  entityId       String?     @map("entity_id")
+  metadata       Json?
+  ipAddress      String?     @map("ip_address")
+  userAgent      String?     @map("user_agent")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  @@index([schoolId, createdAt], map: "idx_audit_logs_school_created")
+  @@index([actorUserId, createdAt], map: "idx_audit_logs_actor_created")
+  @@index([entityType, entityId], map: "idx_audit_logs_entity")
+  @@map("audit_logs")
+}
+
+model EmergencyAlert {
+  id             String            @id @default(uuid()) @db.Uuid
+  schoolId       String            @map("school_id") @db.Uuid
+  school         School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  tripId         String?           @map("trip_id") @db.Uuid
+  trip           Trip?             @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  triggeredById  String?           @map("triggered_by_id") @db.Uuid
+  triggeredBy    User?             @relation("EmergencyTriggeredBy", fields: [triggeredById], references: [id], onDelete: SetNull)
+  severity       EmergencySeverity @default(HIGH)
+  description    String?
+  latitude       Decimal?          @db.Decimal(10, 8)
+  longitude      Decimal?          @db.Decimal(11, 8)
+  location       Unsupported("geography(Point, 4326)")? @map("location")
+  resolvedAt     DateTime?         @map("resolved_at")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  deletedAt      DateTime?         @map("deleted_at")
+
+  @@index([schoolId, createdAt], map: "idx_emergency_alerts_school_created")
+  @@index([schoolId, tripId], map: "idx_emergency_alerts_school_trip")
+  @@index([schoolId, deletedAt], map: "idx_emergency_alerts_school_deleted")
+  @@map("emergency_alerts")
+}

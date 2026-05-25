@@ -1,0 +1,13 @@
+# Railway monorepo config — set root directory per service in Railway dashboard.
+# API service: Root = services/api, Dockerfile = Dockerfile
+# Worker service: Root = services/api, Dockerfile = infrastructure/docker/worker.Dockerfile
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/v1/health/ready"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

@@ -1,0 +1,123 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.turbo/
+.cache/
+.parcel-cache/
+.swc/
+.vercel/
+.netlify/
+storybook-static/
+
+# Workspace dist
+apps/web/.next
+services/api/dist
+services/api/logs
+packages/shared/dist
+packages/*/dist
+
+# Test / coverage
+coverage/
+*.lcov
+.nyc_output/
+playwright-report/
+test-results/
+.vitest/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Env files (NEVER commit real secrets)
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.env.local
+.envrc
+
+# Editor / IDE
+.idea/
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+.metadata
+*.iml
+*.ipr
+*.iws
+apps/driver/.dart_tool
+apps/driver/build
+apps/parent/.dart_tool
+apps/parent/build
+
+# Android
+android/.gradle/
+android/captures/
+android/app/release/
+android/local.properties
+*.keystore
+*.jks
+google-services.json
+key.properties
+
+# iOS
+ios/Pods/
+ios/Flutter/Flutter.framework/
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/app.flx
+ios/Flutter/app.zip
+ios/Flutter/flutter_assets/
+ios/Flutter/flutter_export_environment.sh
+ios/ServiceDefinitions.json
+ios/Runner/GeneratedPluginRegistrant.*
+GoogleService-Info.plist
+
+# Secrets / credentials (defense in depth)
+**/serviceAccountKey.json
+**/firebase-adminsdk*.json
+**/.firebase/
+secrets/
+*.pem
+*.key
+*.p12
+*.mobileprovision
+
+# Prisma local artifacts
+services/api/prisma/migrations/dev*/
+services/api/prisma/dev.db*
+
+# Misc
+tmp/
+temp/
+*.tsbuildinfo
+.eslintcache

@@ -1,0 +1,49 @@
+name: Flutter Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'App to build'
+        type: choice
+        options:
+          - driver
+          - parent
+          - both
+        default: both
+      flavor:
+        description: 'Build flavor'
+        default: prod
+
+jobs:
+  build-android:
+    name: Android APK (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: ${{ github.event.inputs.app == 'both' && fromJSON('["driver","parent"]') || fromJSON(format('["{0}"]', github.event.inputs.app)) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - working-directory: apps/${{ matrix.app }}
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+          flutter build apk --release \
+            --dart-define=FLAVOR=${{ github.event.inputs.flavor }} \
+            --dart-define=GOOGLE_MAPS_KEY=${{ secrets.GOOGLE_MAPS_KEY }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-apk-${{ github.event.inputs.flavor }}
+          path: apps/${{ matrix.app }}/build/app/outputs/flutter-apk/app-release.apk
+
+  # iOS requires macOS + signing certificates — configure FASTLANE_* secrets locally
+  build-ios:
+    name: iOS (manual signing required)
+    runs-on: macos-latest
+    if: false
+    steps:
+      - run: echo "Enable when APPLE_CERTIFICATE_* secrets are configured"

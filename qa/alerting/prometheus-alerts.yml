@@ -1,0 +1,45 @@
+# Reference Prometheus alert rules — wire to Grafana Cloud / self-hosted.
+# Metric names assume future Prometheus exporter; until then use Sentry + uptime checks.
+
+groups:
+  - name: schoolvan_api
+    rules:
+      - alert: ApiReadinessDegraded
+        expr: schoolvan_health_ready_status != 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: API readiness degraded (DB/Redis/queues)
+
+      - alert: HighQueueFailures
+        expr: schoolvan_queue_failed_jobs > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BullMQ failed jobs above threshold
+
+      - alert: SocketConnectSpike
+        expr: rate(schoolvan_socket_connects_total[5m]) > 500
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: Abnormal WebSocket connection rate
+
+      - alert: GpsIngestErrors
+        expr: rate(schoolvan_gps_ingest_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: GPS HTTP ingest error rate high
+
+      - alert: NotificationDispatchFailures
+        expr: rate(schoolvan_notification_dispatch_failures_total[10m]) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: FCM dispatch failures elevated

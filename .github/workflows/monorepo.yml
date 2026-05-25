@@ -1,0 +1,86 @@
+name: Monorepo CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: monorepo-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, types, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Build packages
+        run: pnpm exec turbo run build --filter=@schoolvan/shared
+
+      - name: Lint
+        run: pnpm exec turbo run lint
+
+      - name: Typecheck
+        run: pnpm exec turbo run check-types
+
+      - name: Test
+        run: pnpm exec turbo run test --filter=@schoolvan/api --filter=@schoolvan/web
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/schoolvan_test?schema=public
+          DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/schoolvan_test?schema=public
+          REDIS_URL: redis://localhost:6379
+          JWT_ACCESS_SECRET: ci_access_secret_minimum_32_characters
+          JWT_REFRESH_SECRET: ci_refresh_secret_minimum_32_characters
+          JWT_ACCESS_TTL: '900'
+          JWT_REFRESH_TTL: 30d
+          CORS_ORIGINS: http://localhost:3000
+          FCM_PROJECT_ID: test
+          FCM_CLIENT_EMAIL: test@example.com
+          FCM_PRIVATE_KEY: test
+          GOOGLE_MAPS_API_KEY: test
+          PROCESS_ROLE: all
+
+      - name: Build apps
+        run: pnpm exec turbo run build --filter=@schoolvan/api --filter=@schoolvan/web
+        env:
+          JWT_ACCESS_SECRET: ci_access_secret_minimum_32_characters
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:4000/api/v1
+          NEXT_PUBLIC_WS_BASE_URL: http://localhost:4000
+          API_INTERNAL_URL: http://localhost:4000/api/v1
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: schoolvan_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379

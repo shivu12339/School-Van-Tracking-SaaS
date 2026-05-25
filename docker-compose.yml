@@ -1,0 +1,62 @@
+name: schoolvan
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: schoolvan-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: schoolvan
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      # Host 5434 — avoids local PostgreSQL often bound to 5432/5433 on Windows
+      - '5434:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d schoolvan']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: schoolvan-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  pgadmin:
+    profiles: ['tools']
+    image: dpage/pgadmin4:8.14
+    container_name: schoolvan-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@schoolvan.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - '5050:80'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  mailhog:
+    profiles: ['tools']
+    image: mailhog/mailhog:v1.0.1
+    container_name: schoolvan-mailhog
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+
+volumes:
+  postgres_data:
+  redis_data:

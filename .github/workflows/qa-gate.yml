@@ -1,0 +1,116 @@
+name: QA Gate
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API — unit + e2e + coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: schoolvan_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+    env:
+      NODE_ENV: test
+      PROCESS_ROLE: all
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/schoolvan_test?schema=public
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/schoolvan_test?schema=public
+      REDIS_URL: redis://localhost:6379
+      CORS_ORIGINS: http://localhost:3000
+      JWT_ACCESS_SECRET: ci_access_secret_minimum_32_characters
+      JWT_REFRESH_SECRET: ci_refresh_secret_minimum_32_characters
+      JWT_ACCESS_TTL: 900
+      JWT_REFRESH_TTL: 30d
+      FCM_PROJECT_ID: test
+      FCM_CLIENT_EMAIL: test@schoolvan.app
+      FCM_PRIVATE_KEY: test
+      GOOGLE_MAPS_API_KEY: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install
+      - run: pnpm prisma generate
+      - run: pnpm prisma migrate deploy
+      - run: pnpm test
+      - run: pnpm test:e2e
+      - run: pnpm test:cov
+
+  web:
+    name: Web — Vitest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install
+      - run: pnpm test
+
+  flutter:
+    name: Flutter — ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [driver, parent]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+        working-directory: apps/${{ matrix.app }}
+      - run: flutter analyze
+        working-directory: apps/${{ matrix.app }}
+      - run: flutter test
+        working-directory: apps/${{ matrix.app }}
+
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install
+        working-directory: services/api
+      - run: pnpm audit --audit-level=high
+        working-directory: services/api
+        continue-on-error: true

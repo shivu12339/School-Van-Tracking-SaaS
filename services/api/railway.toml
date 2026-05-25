@@ -1,8 +1,9 @@
-# Copied from infrastructure/railway/api.railway.toml — Railway reads this when root = services/api
+# Railway API service — set rootDirectory to repo root (empty) so the
+# Docker build context includes packages/* needed by the pnpm workspace.
 
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "services/api/Dockerfile"
 
 [deploy]
 healthcheckPath = "/api/v1/health/ready"

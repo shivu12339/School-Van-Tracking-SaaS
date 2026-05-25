@@ -22,14 +22,36 @@ cd apps/web && npm run build
 
 | Setting | Value |
 |---------|--------|
-| Root | `services/api` |
-| Dockerfile | `Dockerfile` |
-| Config | `railway.toml` or `railway.json` |
+| **Root directory** | `` (repo root — DO NOT use `services/api`) |
+| Build context | Repo root (so `packages/*` workspace packages are reachable) |
+| Dockerfile | `services/api/Dockerfile` |
+| Config | `railway.json` (root) or `services/api/railway.json` |
 | Health | `GET /api/v1/health/ready` |
 | WebSockets | Enabled |
-| Entrypoint | `scripts/docker-entrypoint.sh` (migrate + start) |
+| Entrypoint | `services/api/scripts/docker-entrypoint.sh` (migrate + start) |
 
-**Worker:** same root, `Dockerfile.worker`, `PROCESS_ROLE=worker`, see `infrastructure/railway/worker.railway.toml`.
+**Worker:** same root (repo root), `dockerfilePath = services/api/Dockerfile.worker`, `PROCESS_ROLE=worker`, see `infrastructure/railway/worker.railway.toml`.
+
+> **Why repo root?** The pnpm workspace requires `pnpm-workspace.yaml`, `pnpm-lock.yaml`, root `package.json`, and `packages/*` to install correctly. Setting Railway's root directory to `services/api` breaks workspace resolution and shared package imports.
+
+### Local validation
+
+```bash
+# Build (from repo root)
+docker build -f services/api/Dockerfile -t schoolvan-api .
+docker build -f services/api/Dockerfile.worker -t schoolvan-worker .
+
+# Run
+docker run --rm -p 4000:4000 \
+  -e DATABASE_URL=postgresql://... -e DIRECT_DATABASE_URL=postgresql://... \
+  -e REDIS_URL=rediss://... \
+  -e JWT_ACCESS_SECRET=... -e JWT_REFRESH_SECRET=... \
+  -e JWT_ACCESS_TTL=900s -e JWT_REFRESH_TTL=30d \
+  -e CORS_ORIGINS=http://localhost:3000 \
+  -e FCM_PROJECT_ID=replace -e FCM_CLIENT_EMAIL=replace -e FCM_PRIVATE_KEY=replace \
+  -e GOOGLE_MAPS_API_KEY=replace \
+  schoolvan-api
+```
 
 ## Vercel (Web)
 

@@ -1,34 +1,68 @@
-# BullMQ worker — build: docker build -f Dockerfile.worker -t schoolvan-worker .
+# BullMQ worker — pnpm workspace monorepo Docker build.
+# Build context = repo root.
+#
+#   docker build -f services/api/Dockerfile.worker -t schoolvan-worker .
+#
+# Railway: rootDirectory = "" (repo root), dockerfilePath = "services/api/Dockerfile.worker".
+
+############################################
+# Base
+############################################
 FROM node:22-alpine AS base
-RUN apk add --no-cache openssl libc6-compat wget
-RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
-WORKDIR /app
+RUN apk add --no-cache openssl libc6-compat wget python3 make g++
+RUN corepack enable && corepack prepare pnpm@11.1.3 --activate
+ENV CI=true \
+    PNPM_HOME=/pnpm \
+    PATH=/pnpm:$PATH
+WORKDIR /repo
 
+############################################
+# Stage 1 — install workspace dependencies
+############################################
 FROM base AS deps
-COPY package.json ./
-RUN pnpm install
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/config/package.json ./packages/config/
+COPY packages/shared/package.json ./packages/shared/
+COPY services/api/package.json ./services/api/
+RUN pnpm install --frozen-lockfile
 
+############################################
+# Stage 2 — build
+############################################
 FROM deps AS build
-COPY tsconfig.json tsconfig.build.json nest-cli.json ./
-COPY scripts ./scripts
-COPY src ./src
-COPY prisma ./prisma
-RUN pnpm prisma generate && pnpm run build
+COPY tsconfig.base.json turbo.json ./
+COPY packages/config ./packages/config
+COPY packages/shared ./packages/shared
+COPY services/api ./services/api
 
+RUN pnpm --filter @schoolvan/shared run build
+RUN pnpm --filter @schoolvan/api exec prisma generate
+RUN pnpm --filter @schoolvan/api run build
+
+############################################
+# Stage 3 — pnpm deploy
+############################################
+FROM build AS deploy
+RUN pnpm --filter=@schoolvan/api --legacy deploy /out
+WORKDIR /out
+RUN ./node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
+
+############################################
+# Stage 4 — runtime (worker)
+############################################
 FROM node:22-alpine AS runtime
 RUN apk add --no-cache openssl libc6-compat wget
 RUN addgroup -S app && adduser -S app -G app
-RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
 WORKDIR /app
-ENV NODE_ENV=production
-ENV PROCESS_ROLE=worker
-ENV API_PORT=4001
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-COPY package.json ./
-COPY prisma ./prisma
+ENV NODE_ENV=production \
+    PROCESS_ROLE=worker \
+    PORT=4001
+
+COPY --from=deploy --chown=app:app /out/node_modules ./node_modules
+COPY --from=deploy --chown=app:app /out/dist ./dist
+COPY --from=deploy --chown=app:app /out/prisma ./prisma
+COPY --from=deploy --chown=app:app /out/package.json ./package.json
 
 USER app
 EXPOSE 4001

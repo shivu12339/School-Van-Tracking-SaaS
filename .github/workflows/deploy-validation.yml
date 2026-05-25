@@ -28,7 +28,7 @@ jobs:
       - name: Build API image
         uses: docker/build-push-action@v6
         with:
-          context: services/api
+          context: .
           file: services/api/Dockerfile
           push: false
           tags: schoolvan-api:validate
@@ -37,7 +37,7 @@ jobs:
       - name: Build Worker image
         uses: docker/build-push-action@v6
         with:
-          context: services/api
+          context: .
           file: services/api/Dockerfile.worker
           push: false
           tags: schoolvan-worker:validate

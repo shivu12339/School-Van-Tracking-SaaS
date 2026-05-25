@@ -1,8 +1,9 @@
-# Railway worker service — set root directory to services/api, dockerfilePath to Dockerfile.worker
+# Worker service — set Railway rootDirectory to repo root (empty)
+# and dockerfilePath to services/api/Dockerfile.worker.
 
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile.worker"
+dockerfilePath = "services/api/Dockerfile.worker"
 
 [deploy]
 healthcheckPath = "/api/v1/health/ready"

@@ -20,12 +20,26 @@ export function useNotificationSocket() {
     if (!user) return;
 
     const socket = io(`${env.wsBaseUrl}/notifications`, {
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1_000,
+      reconnectionDelayMax: 10_000,
+      timeout: 20_000,
       auth: (cb) => {
         void (async () => {
-          const res = await fetch('/api/auth/token');
-          const json = await res.json().catch(() => ({}));
-          cb({ token: json.accessToken });
+          try {
+            const res = await fetch('/api/auth/token', { credentials: 'include' });
+            if (!res.ok) {
+              cb({ token: null });
+              return;
+            }
+            const json = (await res.json().catch(() => ({}))) as { accessToken?: string };
+            cb({ token: json.accessToken ?? null });
+          } catch {
+            cb({ token: null });
+          }
         })();
       },
     });
@@ -37,7 +51,17 @@ export function useNotificationSocket() {
       incrementUnread();
     });
 
+    socket.on('connect_error', (err) => {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[notification-socket] connect_error', err.message);
+      }
+      if (/Unauthorized|jwt|token/i.test(err.message)) {
+        void fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+      }
+    });
+
     return () => {
+      socket.removeAllListeners();
       socket.disconnect();
     };
   }, [user?.id, setUnread, incrementUnread]);

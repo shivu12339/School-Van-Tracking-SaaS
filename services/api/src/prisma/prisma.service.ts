@@ -1,4 +1,10 @@
-import { INestApplication, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  INestApplication,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { slowQueryLoggingExtension } from '../../prisma/extensions/prisma-client.extension';
 import { buildTenantSoftDeleteExtension } from '../../prisma/extensions/tenant-soft-delete.extension';
@@ -34,7 +40,24 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit(): Promise<void> {
-    await this.db.$connect();
+    // Non-blocking with a hard 10s ceiling. If Supabase is briefly unreachable
+    // we still want Railway healthcheck to come up so the platform doesn't
+    // restart-loop the container. Prisma reconnects lazily on the next query.
+    const logger = new Logger(PrismaService.name);
+    try {
+      await Promise.race([
+        this.db.$connect(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Prisma $connect timed out (10s)')), 10_000),
+        ),
+      ]);
+    } catch (err) {
+      logger.warn(
+        `Initial Prisma connect failed (${
+          err instanceof Error ? err.message : String(err)
+        }); continuing boot. Will retry on first query.`,
+      );
+    }
   }
 
   async onModuleDestroy(): Promise<void> {

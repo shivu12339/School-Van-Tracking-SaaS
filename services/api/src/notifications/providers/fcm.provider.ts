@@ -34,11 +34,16 @@ export class FcmProvider implements OnModuleInit {
     const privateKey = this.configService.get<string>('firebase.privateKey');
     const credentialsPath = this.configService.get<string>('firebase.credentialsPath');
 
-    const isPlaceholder = (value: string | undefined): boolean =>
-      !value ||
-      value === 'replace' ||
-      value.includes('your-project') ||
-      value.includes('...');
+    const isPlaceholder = (value: string | undefined): boolean => {
+      if (!value) return true;
+      const v = value.trim().toLowerCase();
+      if (v === '' || v === 'replace' || v === 'disabled' || v === 'none') return true;
+      // Detects obvious placeholder patterns without flagging real Firebase
+      // service-account emails (which legitimately end in iam.gserviceaccount.com).
+      return /\bplaceholder\b|\byour-project\b|@placeholder\.|@example\.|@your-project\.|\.\.\./i.test(
+        value,
+      );
+    };
 
     if (credentialsPath && !isPlaceholder(credentialsPath)) {
       try {

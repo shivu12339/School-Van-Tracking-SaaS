@@ -66,18 +66,24 @@ export async function bootstrap(): Promise<void> {
   }
 
   const processRole = configService.get<string>('app.processRole', 'all');
+  let redisIoAdapter: RedisIoAdapter | null = null;
   if (processRole !== 'worker') {
-    const redisIoAdapter = new RedisIoAdapter(app, configService);
+    redisIoAdapter = new RedisIoAdapter(app, configService);
+    // Tolerant: connectToRedis logs a warning and falls back to the in-memory
+    // adapter if Upstash is briefly unreachable. Bootstrap MUST NOT block
+    // forever here - Railway healthcheck needs the port bound within 60s.
     await redisIoAdapter.connectToRedis();
     app.useWebSocketAdapter(redisIoAdapter);
   }
 
   const prisma = app.get(PrismaService);
-  await prisma.enableShutdownHooks(app);
+  prisma.enableShutdownHooks(app);
 
   const port = configService.get<number>('app.port', 4000);
+  // Bind to 0.0.0.0 so Railway's edge can reach the container.
   await app.listen(port, '0.0.0.0');
 
   logger.log(`API listening on http://0.0.0.0:${port}/${configService.get('app.prefix')}/v1`);
   logger.log(`Environment: ${configService.get('app.nodeEnv')}`);
+  logger.log(`Process role: ${processRole}`);
 }

@@ -29,7 +29,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit(): Promise<void> {
-    await this.ping();
+    // Non-blocking: Railway healthcheck must come up even if Redis is briefly
+    // degraded. The ioredis client will reconnect on its own; readiness will
+    // report `redis: error` until it does, but the endpoint still responds 200.
+    void this.ping().catch((err) =>
+      this.logger.warn(
+        `Initial Redis ping failed (${err instanceof Error ? err.message : String(err)}); ` +
+          'continuing boot, client will retry in background.',
+      ),
+    );
   }
 
   getClient(): Redis {
